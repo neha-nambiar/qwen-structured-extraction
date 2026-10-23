@@ -12,7 +12,6 @@ eroll converts scanned Indian electoral-roll PDFs into a CSV with eight fields p
 - **Constrained extraction.** Each voter box is sent to Qwen3-VL-8B as its own request and decoded against a JSON schema. 130 of 38,632 fields are incorrect; serial number and age have no errors, and 88% of the errors are in free-text names.
 - **No voter page lost.** A cascade of CLIP and box geometry decides 90% of pages on the CPU and sends the rest to Qwen. CLIP alone would have trusted 6 non-voter pages as voter pages; geometry vetoed all of them, and the final page label was wrong 0 times in 184.
 - **GPU time is the only rented resource.** The stateful services run locally and reach the GPU pod over an SSH tunnel. Extraction costs $0.052 per 1,000 records, and the pod deletes itself after 15 idle minutes.
-- **The benchmark describes the deployed system.** The same 6 PDFs run end to end through the service score 99.65% field accuracy against 99.66% in-process, within run-to-run noise.
 
 ## Problem and output
 
