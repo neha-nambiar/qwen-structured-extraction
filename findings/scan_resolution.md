@@ -4,7 +4,6 @@
 
 The rolls come in two scan formats: 1983 x 2806 JPEG pages (240 DPI) and 949 x 1343 Flate pages (115 DPI). On the low-resolution pages, 0.62% of fields were wrong against 0.28% on the high-resolution pages. Record accuracy drops from 98.15% to 95.98%. The low-resolution sample is small: 821 records from a single 31-page PDF.
 
-![Error rate by field at 240 and 115 DPI](img/scan_resolution.png)
 
 | Page size | Records | Field accuracy | Record accuracy |
 |---|---|---|---|

@@ -6,6 +6,8 @@ The same 4,829 records on the same RTX 4090 were extracted at three `MAX_CONCURR
 
 ![Seconds per record at 8, 16 and 32 concurrent requests](img/concurrency.png)
 
+The curve drops steeply from 8 to 16 and is flat from 16 to 32: past 16 requests in flight the GPU is the bottleneck.
+
 | Concurrency | Wall clock | s per record | Records/s | $ per 1,000 records | Field errors | Field accuracy | Record accuracy |
 |---|---|---|---|---|---|---|---|
 | 8 | 1801.6 s | 0.373 | 2.68 | 0.077 | 127 | 99.67% | 97.87% |

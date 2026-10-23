@@ -4,7 +4,6 @@
 
 On the 4,829 ground-truth records (run at 32 concurrent requests), 130 of 38,632 fields were wrong, spread over 107 records. Names and relation names account for 114 of the 130 errors (88%). Serial number and age were never wrong. Field accuracy is 99.66% and record accuracy (all 8 fields right) is 97.78%.
 
-![130 field errors by field](img/field_errors.png)
 
 | Field | Errors | Accuracy |
 |---|---|---|

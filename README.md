@@ -3,20 +3,20 @@
 [![CI](https://github.com/neha-nambiar/qwen-structured-extraction/actions/workflows/ci.yml/badge.svg)](https://github.com/neha-nambiar/qwen-structured-extraction/actions/workflows/ci.yml)
 [![Release](https://github.com/neha-nambiar/qwen-structured-extraction/actions/workflows/release.yml/badge.svg)](https://github.com/neha-nambiar/qwen-structured-extraction/actions/workflows/release.yml)
 
-eroll turns scanned Indian electoral-roll PDFs into a CSV with eight fields per voter. On **4,829 hand-checked records** (6 PDFs, 184 pages) it reaches **99.66% field accuracy** and **97.78% record accuracy**, with **0 voter pages dropped** and **0 parse failures**, at **0.252 s per record** and **$0.052 per 1,000 records**. It runs as a real service: queues, a database, a human review page, live cost on a Grafana dashboard, and a GPU pod that deletes itself when idle.
+eroll converts scanned Indian electoral-roll PDFs into a CSV with eight fields per voter. On **4,829 hand-checked records** (6 PDFs, 184 pages) it reaches **99.66% field accuracy** and **97.78% record accuracy**, with **0 voter pages dropped** and 0 parse failures, at **0.252 s per record** and **$0.052 per 1,000 records** on one rented RTX 4090. It runs as a deployed service: an API, two queue stages, PostgreSQL, a review page for flagged records, Prometheus and Grafana, and a GPU pod that deletes itself when idle.
 
-![Synthetic page to boxes to crop to JSON](docs/img/hero.png)
+![Synthetic page to detected boxes to one crop to a JSON record](docs/img/hero.png)
 
-**Highlights**
+## Highlights
 
-- **Accurate where it counts.** 130 wrong fields out of 38,632. Serial number and age were never wrong; 88% of the errors are names.
-- **No voter page lost.** A CLIP + box-geometry cascade decides about 90% of pages on the CPU and sends the rest to Qwen. CLIP called 15 of 18 non-voter pages "voter"; geometry vetoed every one, and the final page label was wrong 0 times out of 184.
-- **Cheap to run.** 5 cents per 1,000 records of GPU time on one rented RTX 4090. Only the GPU work is rented, and the pod deletes itself after 15 idle minutes.
-- **A service, not a notebook.** FastAPI, Redis queues, PostgreSQL, a review page for flagged records, Prometheus and Grafana, and CI-built images. The deployed service scores 99.65% field accuracy, matching the in-process benchmark.
+- **Constrained extraction.** Each voter box is sent to Qwen3-VL-8B as its own request and decoded against a JSON schema. 130 of 38,632 fields are wrong; serial number and age are never wrong, and 88% of the errors are in free-text names.
+- **No voter page lost.** A cascade of CLIP and box geometry decides 90% of pages on the CPU and sends the rest to Qwen. CLIP alone would have trusted 6 non-voter pages as voter pages; geometry vetoed all of them, and the final page label was wrong 0 times in 184.
+- **GPU time is the only rented resource.** The stateful services run locally and reach the GPU pod over an SSH tunnel. Extraction costs $0.052 per 1,000 records, and the pod deletes itself after 15 idle minutes.
+- **The benchmark describes the deployed system.** The same 6 PDFs run end to end through the service score 99.65% field accuracy against 99.66% in-process, within run-to-run noise.
 
-## The task
+## Problem and output
 
-Input: a roll PDF where every page is one embedded scan, and a voter page is a grid of up to 30 bordered boxes. Output: one record per box, read into a fixed JSON schema and written to CSV. The synthetic example above becomes:
+Each page of a roll PDF is one embedded scan. A voter page is a grid of up to 30 bordered boxes in 3 columns and up to 10 rows; cover, map and summary pages carry no voter records. The output is one record per box in a fixed schema, written to CSV. The synthetic box in the figure above becomes:
 
 ```json
 {
@@ -26,108 +26,156 @@ Input: a roll PDF where every page is one embedded scan, and a voter page is a g
 }
 ```
 
-## How it works
+## Architecture
+
+The stateful services (API, CPU worker, PostgreSQL, Redis, Prometheus, Grafana) run locally in Docker Compose. Only the GPU work runs on a RunPod RTX 4090 pod, which exposes nothing but SSH. The tunnel carries Redis and PostgreSQL to the pod and brings vLLM and GPU worker metrics back to Prometheus.
+
+```mermaid
+flowchart LR
+    user["Client or<br/>reviewer"] --> api
+    subgraph local["Local machine"]
+        api["FastAPI API"]
+        redis[("Redis queues")]
+        pg[("Postgres")]
+        cpuw["CPU worker<br/>OpenCV + CLIP"]
+    end
+    subgraph pod["RunPod GPU pod"]
+        gpuw["GPU worker"]
+        vllm["vLLM Qwen3-VL"]
+    end
+    api --> redis
+    api --> pg
+    redis --> cpuw
+    cpuw --> pg
+    gpuw -. tunnel .-> redis
+    gpuw -. tunnel .-> pg
+    gpuw --> vllm
+```
+
+Every page is classified twice: CLIP zero-shot on the CPU, and box geometry (column fill, the median box width over one third of the page width). The CLIP label is kept only when both agree and the margin is at least 0.15. Every other page goes to Qwen, which must answer `voter` or `non_voter`.
 
 ```mermaid
 flowchart TD
-    A["PDF: one embedded scan per page"] --> B[OpenCV box detection]
-    B --> C{CLIP sure and<br/>agrees with geometry?}
-    C -->|no| D[Qwen page check]
-    C -->|voter| E[Crop each box]
-    D -->|voter| E
-    E --> F[Qwen3-VL-8B per crop<br/>JSON schema]
-    F --> G[Validators + confidence flags]
-    G --> H[("Postgres: CSV + review page")]
+    A["Page image"] --> B["CLIP p_voter<br/>and margin"]
+    A --> C["Box geometry<br/>column fill"]
+    B --> D{"Agree and<br/>margin >= 0.15?"}
+    C --> D
+    D -- yes --> E["CLIP label<br/>trusted"]
+    D -- no --> F["Qwen fallback"]
+    E --> G["Voter pages<br/>to extraction"]
+    F --> G
 ```
 
 | Piece | Choice |
 |---|---|
-| Box detection | OpenCV adaptive threshold, line morphology and contours; no learned parts, all thresholds relative to page size |
-| Page classifier | CLIP ViT-B/32 zero-shot, trusted only at margin ≥ 0.15 and agreeing with box geometry (column fill ≥ 0.92); anything else goes to Qwen |
-| Extraction | `Qwen3-VL-8B-Instruct` in bf16 on vLLM, one request per box, temperature 0, up to 32 in flight |
-| Output constraints | JSON schema decoding: EPIC id pattern, enums for gender and relation type, digit patterns for serial and age |
-| Service | FastAPI, RQ on Redis (`cpu` and `gpu` queues), PostgreSQL with Alembic; a job id is the PDF's SHA-256 |
-| GPU hosting | RunPod RTX 4090, SSH only; a tunnel carries Postgres and Redis to the pod; the pod deletes itself after 15 idle minutes |
-| Monitoring | Prometheus scraping API, CPU worker, GPU worker and vLLM; one provisioned Grafana dashboard |
-| CI / release | GitHub Actions: ruff, pytest and `alembic check` on every push; `v*` tags build and push the CPU and GPU images to GHCR |
+| Box detection | OpenCV adaptive threshold, line morphology and contours; no learned parts, every threshold relative to page size |
+| Page classifier | CLIP ViT-B/32 zero-shot, trusted at margin ≥ 0.15 when it agrees with geometry (column fill ≥ 0.92); otherwise Qwen |
+| Extraction | `Qwen3-VL-8B-Instruct` in bf16 on vLLM, one request per box, temperature 0, up to 32 requests in flight |
+| Output constraints | JSON schema decoding: EPIC id pattern, enums for gender and relation type, digit patterns for serial number and age |
+| Service | FastAPI, RQ on Redis (`cpu` and `gpu` queues), PostgreSQL with Alembic; the job id is the PDF's SHA-256 |
+| GPU hosting | RunPod RTX 4090, SSH only; the pod deletes itself after 15 idle minutes |
+| Monitoring | Prometheus scraping the API, CPU worker, GPU worker and vLLM; one provisioned Grafana dashboard |
+| CI and release | GitHub Actions: ruff, pytest and `alembic check` on every push; `v*` tags build and push the CPU and GPU images to GHCR |
 
-System diagrams, job sequence, API, database schema and configuration: [docs/architecture.md](docs/architecture.md).
+Job sequence, API, database schema, record lifecycle and configuration: [docs/architecture.md](docs/architecture.md).
 
 ## Results
 
+All figures are from one benchmark run over the 4,829 hand-checked records ([docs/benchmarks.md](docs/benchmarks.md)).
+
 | Measure | Result |
 |---|---|
-| Field accuracy (all 8 fields, 4,829 records) | **99.66%** |
+| Field accuracy (8 fields, 38,632 fields) | **99.66%** |
 | Record accuracy (all 8 fields right) | **97.78%** |
-| Page labels wrong / voter pages dropped | 0 of 184 / 0 of 166 |
-| Detected boxes = true records | 166 of 166 voter pages |
-| CLIP threshold errors on a separate 1,744-page calibration set | 0 |
-| Speed | 0.252 s per record (3.97 records/s) |
-| GPU cost | $0.052 per 1,000 records at $0.74/h |
+| Parse failures | 0 |
+| Voter pages whose detected box count equals the true record count | 166 of 166 |
+| Speed at 32 requests in flight | 0.252 s per record (3.97 records/s) |
+| GPU cost at $0.74/h | $0.052 per 1,000 records |
 
-![CLIP p(voter) against column fill](findings/img/page_classification.png)
+Field errors by field: serial number 0, epic id 2, name 70, relation type 4, relation name 44, house number 8, age 0, gender 2.
 
-CLIP alone would have trusted 6 non-voter pages as voter pages; column fill separates the classes cleanly (voter 0.940 to 0.945, non-voter at most 0.908).
+Page classification:
 
-![Field errors by field](findings/img/field_errors.png)
+| True class | Pages | Decided by | Final label wrong |
+|---|---|---|---|
+| voter | 166 | CLIP, trusted | 0 |
+| non-voter | 18 | Qwen fallback | 0 |
 
-Names and relation names are 114 of the 130 errors. Schema-constrained fields are almost never wrong.
+No voter page was dropped. CLIP chose "voter" for 15 of the 18 non-voter pages, 6 of them with a margin above 0.15; a CLIP-only rule would have trusted those 6, and the geometry check vetoed each one. Column fill separates the classes: 0.940 to 0.945 on voter pages, at most 0.908 on non-voter pages. The 0.15 threshold was fitted on a separate calibration set of 60 PDFs from 8 constituencies (1,744 pages) that shares no file with the test set, with 0 wrongly trusted pages in either class ([docs/calibration.md](docs/calibration.md)).
 
-![Seconds per record vs concurrency](findings/img/concurrency.png)
+Throughput and cost against concurrency, same records and GPU:
 
-Going from 8 to 16 requests in flight cuts time per record by 31%; 32 adds only 1.7% more.
+| Requests in flight | s per record | $ per 1,000 records | Field errors |
+|---|---|---|---|
+| 8 | 0.373 | 0.077 | 127 |
+| 16 | 0.256 | 0.053 | 129 |
+| 32 | 0.252 | 0.052 | 130 |
 
-![Error rate at 240 and 115 DPI](findings/img/scan_resolution.png)
+## Production service
 
-115 DPI scans have 2.2x the field error rate of 240 DPI scans (0.62% vs 0.28%).
+A job moves through two queue stages. The CPU stage decodes every page, detects boxes, classifies the page with CLIP and stores the result; the GPU stage reads only what the CPU stage stored, runs the Qwen fallback, extracts records one page per commit, and computes review flags.
 
-Full reports: [docs/benchmarks.md](docs/benchmarks.md), [docs/calibration.md](docs/calibration.md), and one write-up per topic in [findings/](findings/).
+```mermaid
+flowchart LR
+    A["POST /jobs"] --> B["cpu queue"]
+    B --> C["CPU stage<br/>boxes, CLIP"]
+    C --> D["gpu queue"]
+    D --> E["GPU stage<br/>fallback, records, flags"]
+    E --> F["records.csv"]
+```
 
-## Running it for real
+Identical uploads are one job, a failed job resumes from its last stored page when resubmitted, and a voter page with grid problems fails the job instead of being dropped silently.
 
-![Grafana dashboard after one full run](docs/img/grafana_final.png)
+Verified live run of the deployed service on 2026-10-23: 6 PDFs, 184 pages (166 voter pages trusted from CLIP, 18 sent to Qwen), 4,829 records and 0 failed jobs. With the confidence threshold at -0.005, 426 records were flagged `low_confidence`. The pod was busy for about 22 minutes and idle for 4, mostly model load. The dashboard reports $0.32 of GPU time, $0.066 per 1,000 records at the pod's rate of $0.89/h; the benchmark's $0.052 counts busy time only, at $0.74/h.
 
-One live run of the deployed service: 6 PDFs, 184 pages (166 voter pages trusted from CLIP, 18 sent to Qwen), 4,829 records and 0 failed jobs. With the confidence threshold set to -0.005, 426 records were flagged `low_confidence` for review. The pod was busy for about 22 minutes and idle for 4 (mostly model load); the dashboard shows $0.32 of GPU time, $0.066 per 1,000 records at that pod's $0.89/h rate.
+![Grafana dashboard after the live run](docs/img/grafana_final.png)
 
-Flagged records land in a review list. Each one opens with its box crop beside an edit form; saved corrections are applied to the CSV, and the raw model output stays available. Voter data is blurred in the record screenshot.
+*Figure 1. Grafana dashboard after the live run: progress, failure modes, cost and scrape targets.*
 
-![Review list](docs/img/review_list.png)
+Flagged records are listed for human review. Each record opens with its box crop beside an edit form; saved corrections are append-only and applied to the CSV, and the raw model output remains available with `?raw=1`. Voter data in the screenshots is blurred.
 
-![Review page for one record](docs/img/review_record.png)
+![Review list of flagged records](docs/img/review_list.png)
 
-## What I learned
+*Figure 2. Review list: unreviewed flagged records, oldest job first.*
 
-1. **Validators guard the fields that are already right.** 88% of errors are names, and a misread name passes every structural check. Confidence is the only per-record signal left, but the mean token log probability sits in a band from -0.0190 to -0.0002, because schema tokens (braces, keys) dilute the few tokens that carry the name.
-2. **Use geometry as a veto on CLIP.** At 224 x 224 pixels a cover or summary page looks like a voter grid to CLIP. Box width measures exactly what separates the classes, and the two fail in different ways. The threshold is fitted for the pair, on 1,744 pages that share no file with the test set.
-3. **The GPU saturates at 16 requests in flight.** Beyond that, extra requests only queue inside vLLM. Accuracy stays flat at 127 to 130 field errors across 8, 16 and 32, which is the run-to-run noise floor.
-4. **Scan resolution sets the error floor.** Every crop is upscaled to the same 1,066 prompt tokens, but a 115 DPI box has about 300 real pixels of width against about 620 at 240 DPI. Names roughly double their error rate, and house numbers go from 1 error to 7.
+![Review page for one flagged record](docs/img/review_record.png)
 
-## Limits
+*Figure 3. Review page: box crop, extracted fields and flag reasons for one record.*
 
-- The ground truth is 6 PDFs from 2 constituencies in one roll format; the low-resolution sample is a single 31-page PDF (821 records).
+The GPU worker checks once a minute and deletes its pod through the RunPod API after 15 idle minutes. Model loading, a failed vLLM probe and a lost tunnel all count as idle time, so a disconnected pod also shuts itself down. Each `v*` tag builds the CPU and GPU images in GitHub Actions and pushes them to GHCR; the pod launches from the tagged image.
+
+## Key engineering findings
+
+1. **Structural validators guard the fields that are already right.** 88% of field errors are names and relation names, and a misread name passes every structural check. Confidence is the remaining per-record signal, but the mean token log probability falls in a narrow band from -0.0190 to -0.0002, because tokens forced by the schema (braces, keys) dilute the few tokens that carry the name. A threshold in that band either flags almost nothing or flags many correct records ([findings/confidence.md](findings/confidence.md)).
+2. **Geometry works as a veto on CLIP.** CLIP sees the page at 224 x 224, where a cover or summary page resembles a voter grid. Column fill measures the property that separates the classes, and the two checks fail in different ways. The threshold is fitted for the pair, not for CLIP alone ([findings/page_classification.md](findings/page_classification.md)).
+3. **The GPU saturates at 16 requests in flight.** Going from 8 to 16 cuts time per record by 31%; going to 32 cuts it by a further 1.7%, because extra requests only wait in vLLM's queue. Field errors stay at 127 to 130 across the three settings, which is the run-to-run noise floor ([findings/concurrency.md](findings/concurrency.md)).
+
+## Limitations
+
+- The ground truth is 6 PDFs from 2 constituencies in one roll format.
 - Each benchmark configuration and the service run were run once.
-- The confidence threshold is not calibrated. -0.005 was a setting for the live run; in such a narrow band a threshold either flags almost nothing or many correct records.
+- The confidence threshold is not calibrated against the scored mistakes; -0.005 was a setting for the live run.
 - 18 non-voter pages is a small sample for the Qwen fallback (18 of 18 correct).
-- Box detection and the 0.92 geometry cut-off are measured on this layout (3 columns, up to 10 rows); a new format needs re-measuring and refitting.
+- Box detection and the 0.92 column-fill cut-off are measured on one layout (3 columns, up to 10 rows); a new format requires re-measuring and refitting.
 
-## Repository
+## Repository layout
 
-| Path | What it is |
+| Path | Contents |
 |---|---|
-| `src/eroll/pages/` | PDF image extraction, box detection, CLIP + geometry classifier |
-| `src/eroll/extraction/` | record schema, prompt, vLLM requests, validators |
+| `src/eroll/pages/` | PDF image extraction, box detection, CLIP and geometry classifier |
+| `src/eroll/extraction/` | Record schema, prompt, vLLM requests, validators |
 | `src/eroll/service/` | FastAPI app, review pages, RQ jobs, workers, metrics |
-| `src/eroll/evaluation/` | benchmark run, scorer, ground-truth check, CLIP calibration |
+| `src/eroll/evaluation/` | Benchmark run, scorer, ground-truth check, CLIP calibration |
 | `deploy/` | Dockerfiles, compose stack, Prometheus, Grafana, pod launch and tunnel scripts |
-| `migrations/` | Alembic database migration |
-| `tests/` | unit tests |
-| `docs/` | architecture, benchmark and calibration reports, screenshots |
-| `findings/` | one write-up per experiment, with charts |
+| `migrations/` | Alembic migration |
+| `tests/` | Unit tests |
+| `docs/` | Architecture, benchmark and calibration reports, screenshots |
+| `findings/` | One write-up per experiment |
 | `.github/workflows/` | CI and release |
 
 ## Reproduce
 
-Needs Python 3.12, [uv](https://docs.astral.sh/uv/), Docker and, for the GPU side, a RunPod account. The deploy scripts are PowerShell.
+Requires Python 3.12, [uv](https://docs.astral.sh/uv/), Docker and, for the GPU side, a RunPod account. The deploy scripts are PowerShell.
 
 ```powershell
 cp .env.example .env    # replace every change-me value
@@ -147,7 +195,7 @@ deploy/launch_pod.ps1 -Tag v3.0.0 -Mode worker
 deploy/tunnel.ps1 -PodIp <ip> -Port <port> -IdentityFile <ssh key>
 ```
 
-Pages are classified locally right away. The GPU worker loads the model, probes vLLM, checks the database schema before its first job (Postgres is only reachable once the tunnel is up), then drains the `gpu` queue. To benchmark, launch with `-Mode eval -LifetimeMinutes 90`, run `python -m eroll.evaluation.run_local bench-32 data/pdfs/*.pdf` on the pod, copy `out/eval-bench-32` back and run `uv run python -m eroll.evaluation.score bench-32`, which writes the benchmark report. Rolls, ground truth and outputs hold personal data and are not in the repo. Details: [docs/architecture.md](docs/architecture.md).
+Pages are classified locally on upload; the GPU worker drains the `gpu` queue once the tunnel is up. To benchmark, launch with `-Mode eval -LifetimeMinutes 90`, run `python -m eroll.evaluation.run_local bench-32 data/pdfs/*.pdf` on the pod, copy `out/eval-bench-32` back and run `uv run python -m eroll.evaluation.score bench-32`, which writes the benchmark report. Rolls, ground truth and outputs contain personal data and are not in the repository.
 
 ## Credits
 

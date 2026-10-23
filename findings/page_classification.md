@@ -4,13 +4,14 @@
 
 On the 184 ground-truth pages (166 voter, 18 non-voter), the final page label was wrong 0 times and no voter page was dropped. Every voter page was trusted from CLIP with a margin of at least 0.332 (median 0.973). Every non-voter page went to the Qwen fallback, and Qwen labelled all 18 correctly. CLIP on its own would have got this badly wrong: it picked "voter" for 15 of the 18 non-voter pages, 6 of them with a margin above the 0.15 threshold. The box-geometry check vetoed all 6.
 
-![CLIP margin per page, by outcome](img/clip_margin.png)
+![CLIP p(voter) against column fill for the 184 pages](img/clip_vs_fill.png)
+
+Each point is one page. The dotted line is p(voter) = 0.575, where the margin reaches 0.15; the dashed line is the 0.92 column-fill cut-off. A CLIP-only rule trusts everything above the dotted line as voter, which includes 6 non-voter pages. All 6 lie left of the dashed line, so geometry vetoes them. Pages with no detected box are drawn at "no boxes".
 
 ## How a page is decided
 
 Each page is classified twice. CLIP ViT-B/32 compares the page with two voter and two non-voter text prompts and gives p(voter), p(non-voter) and their margin. Separately, box detection measures column fill: the median detected box width over one third of the page width. Geometry says voter at 0.92 or more. The CLIP label is trusted only if the margin is at least 0.15 and CLIP agrees with geometry. Anything else goes to Qwen3-VL, which sees the page shrunk to a 1,280 px longest edge and must answer `voter` or `non_voter`.
 
-![CLIP p(voter) against column fill](img/page_classification.png)
 
 | Ground truth | Pages | Outcome | Final label wrong |
 |---|---|---|---|
