@@ -90,7 +90,7 @@ flowchart TD
     F --> G
 ```
 
-- Geometry says voter when column fill is at least 0.92 (`MIN_COLUMN_FILL_RATIO`); a page with no detected boxes is non-voter. The width test, not the box count, decides, so a voter page with a missed box stays a voter page and fails loudly.
+- Geometry says voter when column fill is at least 0.92 (`MIN_COLUMN_FILL_RATIO`); a page with no detected boxes is non-voter. The width test, not the box count, decides, so a voter page with a missed box stays a voter page and fails with an explicit error.
 - CLIP sees the page padded to a white square, because its processor would otherwise centre-crop away the header and footer.
 - The 0.15 margin threshold was fitted on a separate calibration set (60 PDFs, 1,744 pages).
 - The fallback sends the page downscaled to a 1,280 px longest edge and constrains the answer to `voter` or `non_voter`.
@@ -199,7 +199,7 @@ All routes need the API key, as an `X-API-Key` header or as the password of HTTP
 
 | Method and path | Purpose |
 |---|---|
-| `POST /jobs` | Upload a PDF (multipart `file`). Returns id and status. 413 above `MAX_UPLOAD_BYTES`, 422 if not a readable PDF. Re-uploading a failed job retries it; any other existing job just returns its status. |
+| `POST /jobs` | Upload a PDF (multipart `file`). Returns id and status. 413 above `MAX_UPLOAD_BYTES`, 422 if not a readable PDF. Re-uploading a failed job retries it; any other existing job returns its current status. |
 | `GET /jobs/{id}` | Status, per-page decisions, problems, record and flagged counts, GPU seconds. |
 | `GET /jobs/{id}/records.csv` | Records with corrections applied; `?raw=1` for uncorrected output. 409 until completed. |
 | `GET /review` | Unreviewed flagged records, oldest job first, then page and box. |

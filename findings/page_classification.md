@@ -1,8 +1,8 @@
-# Page classification: CLIP alone is not enough, geometry catches it
+# Page classification: CLIP alone is insufficient, geometry corrects it
 
 ## Summary
 
-On the 184 ground-truth pages (166 voter, 18 non-voter), the final page label was wrong 0 times and no voter page was dropped. Every voter page was trusted from CLIP with a margin of at least 0.332 (median 0.973). Every non-voter page went to the Qwen fallback, and Qwen labelled all 18 correctly. CLIP on its own would have got this badly wrong: it picked "voter" for 15 of the 18 non-voter pages, 6 of them with a margin above the 0.15 threshold. The box-geometry check vetoed all 6.
+On the 184 ground-truth pages (166 voter, 18 non-voter), the final page label was wrong 0 times and no voter page was dropped. Every voter page was trusted from CLIP with a margin of at least 0.332 (median 0.973). Every non-voter page went to the Qwen fallback, and Qwen labelled all 18 correctly. CLIP on its own would have produced serious errors: it chose "voter" for 15 of the 18 non-voter pages, 6 of them with a margin above the 0.15 threshold. The box-geometry check vetoed all 6.
 
 ![CLIP p(voter) against column fill for the 184 pages](img/clip_vs_fill.png)
 
@@ -25,7 +25,7 @@ The 18 fallback pages split into two kinds:
 
 ## Why CLIP is fooled and geometry is not
 
-CLIP looks at the whole page shrunk to 224 x 224 pixels. At that size a cover page with bordered blocks, or a summary page full of table cells, can look much like a grid of voter boxes. The prompts are zero-shot and were not tuned on these pages, so CLIP has no way to tell the difference.
+CLIP looks at the whole page shrunk to 224 x 224 pixels. At that size a cover page with bordered blocks, or a summary page full of table cells, can resemble a grid of voter boxes. The prompts are zero-shot and were not tuned on these pages, so CLIP cannot distinguish the two.
 
 Geometry measures exactly the property that separates the classes. Voter boxes span 0.940 to 0.945 of a column on every voter page. Table cells on non-voter pages are narrower: 10 non-voter pages had no box-sized rectangle at all, and the other 8 had a column fill between 0.740 and 0.908. The two checks fail in different ways, which is why the combination works.
 

@@ -6,11 +6,11 @@ Every record stores a confidence: the mean log probability of the tokens in the 
 
 ## Why the band is so narrow
 
-The answer is decoded against a JSON schema at temperature 0. Most of its tokens are forced by the schema: braces, quotes, colons and the eight key names, whose log probability is close to 0. The few tokens that carry a name or a house number are averaged together with all of those, so even a shaky name read barely moves the mean.
+The answer is decoded against a JSON schema at temperature 0. Most of its tokens are forced by the schema: braces, quotes, colons and the eight key names, whose log probability is close to 0. The few tokens that carry a name or a house number are averaged together with all of those, so even an uncertain name reading has little effect on the mean.
 
 ## Why it matters
 
-Names and relation names are 88% of all field errors, and they pass every structural validator. Confidence is the only per-record signal that could route them to review. With the mean squeezed into a band about 0.02 wide, a threshold would either flag almost nothing or flag a large share of correct records.
+Names and relation names are 88% of all field errors, and they pass every structural validator. Confidence is the only per-record signal that could route them to review. With the mean confined to a band about 0.02 wide, a threshold would either flag almost nothing or flag a large share of correct records.
 
 ## How it is exposed
 

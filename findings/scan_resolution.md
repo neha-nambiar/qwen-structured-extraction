@@ -21,9 +21,9 @@ The rolls come in two scan formats: 1983 x 2806 JPEG pages (240 DPI) and 949 x 1
 
 ## Why
 
-Both formats reach the model as the same number of tokens. vLLM is pinned to `min_pixels` 802,816, so every crop is upscaled to at least that many pixels, and the first crop at each page size measured 1,066 prompt tokens. A 115 DPI box is only about 300 pixels wide before that upscale, against about 620 at 240 DPI, so the model gets the same token budget but much less real detail: thin strokes and small letters blur together.
+Both formats reach the model as the same number of tokens. vLLM is pinned to `min_pixels` 802,816, so every crop is upscaled to at least that many pixels, and the first crop at each page size measured 1,066 prompt tokens. A 115 DPI box is only about 300 pixels wide before that upscale, against about 620 at 240 DPI, so the model gets the same token budget but much less real detail: thin strokes and small letters merge.
 
-The extra errors land where detail matters most. Names roughly double. House numbers go from 1 error to 7, because they are short, mix digits and letters, and a thin printed dash is hard to tell from an empty field at this resolution (a dash-only house number is already normalised to empty for this reason). Constrained fields stay clean at both resolutions.
+The additional errors occur where detail matters most. Name errors roughly double. House numbers go from 1 error to 7, because they are short, mix digits and letters, and a thin printed dash is hard to tell from an empty field at this resolution (a dash-only house number is already normalised to empty for this reason). Constrained fields stay clean at both resolutions.
 
 ## What it means
 

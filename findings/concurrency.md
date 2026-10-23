@@ -18,10 +18,10 @@ Cost assumes $0.74 per GPU hour. The wall clock covers the Qwen page fallback, e
 
 ## Why it saturates
 
-Every box is its own request: one crop of about 1,066 prompt tokens (almost all of it image tokens) and a JSON answer capped at 200 tokens. vLLM batches whatever requests are in flight. At 8, the batch is too small to keep the GPU busy, so adding requests adds throughput almost for free. By 16 the GPU is the bottleneck, and extra requests only wait in vLLM's queue. 32 is the default: it is no slower than 16 and leaves headroom while the next page is decoded and cropped.
+Every box is its own request: one crop of about 1,066 prompt tokens (almost all of it image tokens) and a JSON answer capped at 200 tokens. vLLM batches whatever requests are in flight. At 8, the batch is too small to keep the GPU busy, so additional requests increase throughput directly. By 16 the GPU is the bottleneck, and extra requests only wait in vLLM's queue. 32 is the default: it is no slower than 16 and leaves headroom while the next page is decoded and cropped.
 
 Requests are not limited per page. A semaphore caps the number in flight across page boundaries, and crops for the next page are pulled only when a slot frees up. So the GPU never idles at the end of a page waiting for its last box, and memory stays bounded to a few decoded pages.
 
 ## Accuracy is flat
 
-Decoding is greedy (temperature 0) with a JSON schema, so in principle the answers should not depend on concurrency. In practice the three runs differ by 127 to 130 field errors. Different batch shapes change the floating-point maths slightly, and a near-tie between two tokens can flip. A spread of about 3 fields in 38,632 is the run-to-run noise floor for these numbers; differences smaller than that should not be read as real.
+Decoding is greedy (temperature 0) with a JSON schema, so in principle the answers should not depend on concurrency. In practice the three runs differ by 127 to 130 field errors. Different batch shapes change the floating-point maths slightly, and a near-tie between two tokens can flip. A spread of about 3 fields in 38,632 is the run-to-run noise floor for these numbers; differences smaller than that are not significant.
