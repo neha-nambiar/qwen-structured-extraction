@@ -47,8 +47,13 @@ jobs:
       matrix:
         image: [cpu, gpu]
     steps:
+      # The vLLM base unpacks to 20+ GB, so clear the runner's preinstalled toolchains first
       - name: Free disk space
-        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /opt/hostedtoolcache /usr/local/share/boost /usr/local/.ghcup
+          sudo docker image prune --all --force
+          df -h /
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
@@ -71,8 +76,13 @@ jobs:
       matrix:
         image: [cpu, gpu]
     steps:
+      # The vLLM base unpacks to 20+ GB, so clear the runner's preinstalled toolchains first
       - name: Free disk space
-        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /opt/hostedtoolcache /usr/local/share/boost /usr/local/.ghcup
+          sudo docker image prune --all --force
+          df -h /
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 

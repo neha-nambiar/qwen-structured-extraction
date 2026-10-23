@@ -67,6 +67,9 @@ $podEnv = [ordered]@{
     EVAL_LIFETIME_MINUTES = "$LifetimeMinutes"
 }
 
+# Optional: turns on the low_confidence flag in the GPU worker
+if ($env:CONFIDENCE_THRESHOLD) { $podEnv['CONFIDENCE_THRESHOLD'] = $env:CONFIDENCE_THRESHOLD }
+
 if ($Mode -eq 'worker') {
     # The pod reaches Postgres and Redis at its own 127.0.0.1 via the tunnel's reverse forwards.
     foreach ($name in 'DATABASE_URL', 'REDIS_URL') {
