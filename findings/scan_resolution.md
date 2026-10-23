@@ -2,7 +2,7 @@
 
 ## Summary
 
-The rolls come in two scan formats: 1983 x 2806 JPEG pages (240 DPI) and 949 x 1343 Flate pages (115 DPI). On the low-resolution pages, 0.62% of fields were wrong against 0.28% on the high-resolution pages. Record accuracy drops from 98.15% to 95.98%. The low-resolution sample is small: 821 records from a single 31-page PDF.
+The rolls use two scan formats: 1983 x 2806 JPEG pages (240 DPI) and 949 x 1343 Flate pages (115 DPI). On the low-resolution pages, 0.62% of fields were incorrect, against 0.28% on the high-resolution pages. Record accuracy decreases from 98.15% to 95.98%. The low-resolution sample is small: 821 records from a single 31-page PDF.
 
 
 | Page size | Records | Field accuracy | Record accuracy |
@@ -19,12 +19,12 @@ The rolls come in two scan formats: 1983 x 2806 JPEG pages (240 DPI) and 949 x 1
 | epic id | 2 | 0 |
 | gender | 2 | 0 |
 
-## Why
+## Analysis
 
-Both formats reach the model as the same number of tokens. vLLM is pinned to `min_pixels` 802,816, so every crop is upscaled to at least that many pixels, and the first crop at each page size measured 1,066 prompt tokens. A 115 DPI box is only about 300 pixels wide before that upscale, against about 620 at 240 DPI, so the model gets the same token budget but much less real detail: thin strokes and small letters merge.
+Both formats reach the model as the same number of tokens. vLLM is pinned to `min_pixels` 802,816, so every crop is upscaled to at least that many pixels, and the first crop at each page size measured 1,066 prompt tokens. A 115 DPI box is approximately 300 pixels wide before that upscale, against approximately 620 at 240 DPI, so the model receives the same token budget but less than half the source detail, and thin strokes and small letters merge.
 
-The additional errors occur where detail matters most. Name errors roughly double. House numbers go from 1 error to 7, because they are short, mix digits and letters, and a thin printed dash is hard to tell from an empty field at this resolution (a dash-only house number is already normalised to empty for this reason). Constrained fields stay clean at both resolutions.
+The additional errors concentrate in the fields that depend most on fine detail. The name error rate more than doubles. House numbers increase from 1 error to 7, because they are short, mix digits and letters, and a thin printed dash is difficult to distinguish from an empty field at this resolution (a dash-only house number is already normalised to empty for this reason). Schema-constrained fields have no errors at the lower resolution.
 
-## What it means
+## Implications
 
-Page images are taken straight from the PDF's embedded scan, so the pipeline already uses every stored pixel; there is no higher-resolution source to fall back to. A low-resolution roll should be expected to need more review, and the per-size accuracy is reported separately so a mix of formats does not hide it.
+Page images are taken directly from the PDF's embedded scan, so the pipeline already uses the full stored resolution, and no higher-resolution source exists. Low-resolution rolls therefore require more review, and per-size accuracy is reported separately so that a mix of formats does not mask the difference.

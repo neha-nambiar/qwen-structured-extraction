@@ -1,4 +1,4 @@
-# Deployed service matches the in-process benchmark
+# Deployed service: 99.65% field accuracy against 99.66% in-process
 
 ## Summary
 
@@ -18,12 +18,12 @@ The 6 ground-truth PDFs were also run end to end through the deployed service (u
 | epic id | 2 | 1 |
 | gender | 2 | 2 |
 
-## Why they agree
+## Analysis
 
-Both paths run the same page and extraction code: the same embedded-image decode, box detection, CLIP and geometry decision, crops, prompt, schema and vLLM settings. The service stores each page's original image bytes in Postgres and decodes them again in the GPU worker, so the boxes found on the CPU line up with the crops cut on the GPU.
+Both paths run the same page and extraction code: the same embedded-image decode, box detection, CLIP and geometry decision, crops, prompt, schema and vLLM settings. The service stores each page's original image bytes in Postgres and decodes them again in the GPU worker, so the boxes found on the CPU align with the crops cut on the GPU.
 
-The gap of 5 fields is within run-to-run noise. The three in-process runs at 8, 16 and 32 concurrent requests already spread from 127 to 130 errors, because different batch shapes in vLLM can flip near-tied tokens even at temperature 0. The extra errors fall in the same free-text fields as before.
+The gap of 5 fields is within run-to-run noise. The three in-process runs at 8, 16 and 32 concurrent requests already range from 127 to 130 errors, because different batch shapes in vLLM can flip near-tied tokens even at temperature 0. The additional errors fall in the same free-text fields as in the in-process run.
 
-## What it means
+## Implications
 
-The benchmark numbers describe the deployed system, not a separate evaluation harness. The service run was scored on accuracy only, so it gives no timing figure to compare.
+The benchmark numbers describe the deployed system, not a separate evaluation harness. The service run was scored on accuracy only, so it provides no timing figure for comparison.

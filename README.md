@@ -9,7 +9,7 @@ eroll converts scanned Indian electoral-roll PDFs into a CSV with eight fields p
 
 ## Highlights
 
-- **Constrained extraction.** Each voter box is sent to Qwen3-VL-8B as its own request and decoded against a JSON schema. 130 of 38,632 fields are wrong; serial number and age are never wrong, and 88% of the errors are in free-text names.
+- **Constrained extraction.** Each voter box is sent to Qwen3-VL-8B as its own request and decoded against a JSON schema. 130 of 38,632 fields are incorrect; serial number and age have no errors, and 88% of the errors are in free-text names.
 - **No voter page lost.** A cascade of CLIP and box geometry decides 90% of pages on the CPU and sends the rest to Qwen. CLIP alone would have trusted 6 non-voter pages as voter pages; geometry vetoed all of them, and the final page label was wrong 0 times in 184.
 - **GPU time is the only rented resource.** The stateful services run locally and reach the GPU pod over an SSH tunnel. Extraction costs $0.052 per 1,000 records, and the pod deletes itself after 15 idle minutes.
 - **The benchmark describes the deployed system.** The same 6 PDFs run end to end through the service score 99.65% field accuracy against 99.66% in-process, within run-to-run noise.
@@ -52,7 +52,7 @@ flowchart LR
     gpuw --> vllm
 ```
 
-Every page is classified twice: CLIP zero-shot on the CPU, and box geometry (column fill, the median box width over one third of the page width). The CLIP label is kept only when both agree and the margin is at least 0.15. Every other page goes to Qwen, which must answer `voter` or `non_voter`.
+Every page is classified twice: CLIP zero-shot on the CPU, and box geometry (column fill, the median box width over one third of the page width). The CLIP label is kept only when both agree and the margin is at least 0.15. Every other page goes to Qwen, which is constrained to answer `voter` or `non_voter`.
 
 ```mermaid
 flowchart TD
@@ -68,7 +68,7 @@ flowchart TD
 
 | Piece | Choice |
 |---|---|
-| Box detection | OpenCV adaptive threshold, line morphology and contours; no learned parts, every threshold relative to page size |
+| Box detection | OpenCV adaptive threshold, line morphology and contours; no learned components, every threshold relative to page size |
 | Page classifier | CLIP ViT-B/32 zero-shot, trusted at margin ≥ 0.15 when it agrees with geometry (column fill ≥ 0.92); otherwise Qwen |
 | Extraction | `Qwen3-VL-8B-Instruct` in bf16 on vLLM, one request per box, temperature 0, up to 32 requests in flight |
 | Output constraints | JSON schema decoding: EPIC id pattern, enums for gender and relation type, digit patterns for serial number and age |
@@ -86,7 +86,7 @@ All figures are from one benchmark run over the 4,829 hand-checked records ([doc
 | Measure | Result |
 |---|---|
 | Field accuracy (8 fields, 38,632 fields) | **99.66%** |
-| Record accuracy (all 8 fields right) | **97.78%** |
+| Record accuracy (all 8 fields correct) | **97.78%** |
 | Parse failures | 0 |
 | Voter pages whose detected box count equals the true record count | 166 of 166 |
 | Speed at 32 requests in flight | 0.252 s per record (3.97 records/s) |
@@ -124,9 +124,9 @@ flowchart LR
     E --> F["records.csv"]
 ```
 
-Identical uploads are one job, a failed job resumes from its last stored page when resubmitted, and a voter page with grid problems fails the job instead of being dropped silently.
+Identical uploads map to a single job, a failed job resumes from its last stored page when resubmitted, and a voter page with grid problems fails the job instead of being dropped silently.
 
-Verified live run of the deployed service on 2026-10-23: 6 PDFs, 184 pages (166 voter pages trusted from CLIP, 18 sent to Qwen), 4,829 records and 0 failed jobs. With the confidence threshold at -0.005, 426 records were flagged `low_confidence`. The pod was busy for about 22 minutes and idle for 4, mostly model load. The dashboard reports $0.32 of GPU time, $0.066 per 1,000 records at the pod's rate of $0.89/h; the benchmark's $0.052 counts busy time only, at $0.74/h.
+Verified live run of the deployed service on 2026-10-23: 6 PDFs, 184 pages (166 voter pages trusted from CLIP, 18 sent to Qwen), 4,829 records and 0 failed jobs. With the confidence threshold at -0.005, 426 records were flagged `low_confidence`. The pod was busy for approximately 22 minutes and idle for 4, predominantly during model loading. The dashboard reports $0.32 of GPU time, $0.066 per 1,000 records at the pod's rate of $0.89/h; the benchmark's $0.052 counts busy time only, at $0.74/h.
 
 ![Grafana dashboard after the live run](docs/img/grafana_final.png)
 
@@ -146,9 +146,9 @@ The GPU worker checks once a minute and deletes its pod through the RunPod API a
 
 ## Key engineering findings
 
-1. **Structural validators guard the fields that are already right.** 88% of field errors are names and relation names, and a misread name passes every structural check. Confidence is the remaining per-record signal, but the mean token log probability falls in a narrow band from -0.0190 to -0.0002, because tokens forced by the schema (braces, keys) dilute the few tokens that carry the name. A threshold in that band either flags almost nothing or flags many correct records ([findings/confidence.md](findings/confidence.md)).
-2. **Geometry works as a veto on CLIP.** CLIP sees the page at 224 x 224, where a cover or summary page resembles a voter grid. Column fill measures the property that separates the classes, and the two checks fail in different ways. The threshold is fitted for the pair, not for CLIP alone ([findings/page_classification.md](findings/page_classification.md)).
-3. **The GPU saturates at 16 requests in flight.** Going from 8 to 16 cuts time per record by 31%; going to 32 cuts it by a further 1.7%, because extra requests only wait in vLLM's queue. Field errors stay at 127 to 130 across the three settings, which is the run-to-run noise floor ([findings/concurrency.md](findings/concurrency.md)).
+1. **Structural validators cover the fields with the fewest errors.** 88% of field errors are names and relation names, and an incorrectly read name passes every structural check. Confidence is the remaining per-record signal, but the mean token log probability falls in a narrow band from -0.0190 to -0.0002, because tokens forced by the schema (braces, keys) dilute the few tokens that carry the name. A threshold in that band flags either a negligible share of records or a large share of correct records ([findings/confidence.md](findings/confidence.md)).
+2. **Box geometry acts as a veto on CLIP.** CLIP processes the page at 224 x 224, a resolution at which a cover or summary page resembles a voter grid. Column fill measures the property that separates the classes, and the two checks fail in different ways. The threshold is fitted for the pair, not for CLIP alone ([findings/page_classification.md](findings/page_classification.md)).
+3. **The GPU saturates at 16 requests in flight.** Increasing from 8 to 16 reduces time per record by 31%; increasing to 32 reduces it by a further 1.7%, because additional requests only wait in vLLM's queue. Field errors stay at 127 to 130 across the three settings, which is the run-to-run noise floor ([findings/concurrency.md](findings/concurrency.md)).
 
 ## Limitations
 

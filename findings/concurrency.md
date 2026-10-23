@@ -2,11 +2,11 @@
 
 ## Summary
 
-The same 4,829 records on the same RTX 4090 were extracted at three `MAX_CONCURRENT_REQUESTS` settings. Going from 8 to 16 requests in flight cut the time per record by 31%. Going from 16 to 32 cut it by only 1.7% more. Accuracy did not change in any meaningful way. Each setting was run once.
+The same 4,829 records on the same RTX 4090 were extracted at three `MAX_CONCURRENT_REQUESTS` settings. Increasing from 8 to 16 requests in flight reduced the time per record by 31%; increasing from 16 to 32 reduced it by a further 1.7%. Accuracy did not change beyond run-to-run noise. Each setting was run once.
 
 ![Seconds per record at 8, 16 and 32 concurrent requests](img/concurrency.png)
 
-The curve drops steeply from 8 to 16 and is flat from 16 to 32: past 16 requests in flight the GPU is the bottleneck.
+Time per record decreases steeply from 8 to 16 and remains nearly constant from 16 to 32: above 16 requests in flight the GPU is the bottleneck.
 
 | Concurrency | Wall clock | s per record | Records/s | $ per 1,000 records | Field errors | Field accuracy | Record accuracy |
 |---|---|---|---|---|---|---|---|
@@ -16,12 +16,12 @@ The curve drops steeply from 8 to 16 and is flat from 16 to 32: past 16 requests
 
 Cost assumes $0.74 per GPU hour. The wall clock covers the Qwen page fallback, extraction and CSV writing; CLIP runs before the timer starts.
 
-## Why it saturates
+## Analysis: throughput
 
-Every box is its own request: one crop of about 1,066 prompt tokens (almost all of it image tokens) and a JSON answer capped at 200 tokens. vLLM batches whatever requests are in flight. At 8, the batch is too small to keep the GPU busy, so additional requests increase throughput directly. By 16 the GPU is the bottleneck, and extra requests only wait in vLLM's queue. 32 is the default: it is no slower than 16 and leaves headroom while the next page is decoded and cropped.
+Every box is a separate request: one crop of approximately 1,066 prompt tokens (predominantly image tokens) and a JSON answer capped at 200 tokens. vLLM batches the requests in flight. At 8, the batch is too small to keep the GPU fully utilised, so additional requests increase throughput directly. At 16 the GPU is the bottleneck, and additional requests only wait in vLLM's queue. 32 is the default: it is not slower than 16 and provides headroom while the next page is decoded and cropped.
 
-Requests are not limited per page. A semaphore caps the number in flight across page boundaries, and crops for the next page are pulled only when a slot frees up. So the GPU never idles at the end of a page waiting for its last box, and memory stays bounded to a few decoded pages.
+Requests are not limited per page. A semaphore caps the number in flight across page boundaries, and crops for the next page are pulled only when a slot becomes free. As a result, the GPU does not idle at the end of a page while its last box completes, and memory remains bounded to a few decoded pages.
 
-## Accuracy is flat
+## Analysis: accuracy
 
-Decoding is greedy (temperature 0) with a JSON schema, so in principle the answers should not depend on concurrency. In practice the three runs differ by 127 to 130 field errors. Different batch shapes change the floating-point maths slightly, and a near-tie between two tokens can flip. A spread of about 3 fields in 38,632 is the run-to-run noise floor for these numbers; differences smaller than that are not significant.
+Decoding is greedy (temperature 0) with a JSON schema, so in principle the outputs are independent of concurrency. In practice the three runs range from 127 to 130 field errors. Different batch shapes change the floating-point arithmetic slightly, which can flip a near-tie between two tokens. A spread of 3 fields in 38,632 is the run-to-run noise floor for these numbers; smaller differences are not significant.

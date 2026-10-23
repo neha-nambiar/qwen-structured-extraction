@@ -1,6 +1,6 @@
 # Architecture
 
-eroll runs as two halves. The stateful services (API, CPU worker, Postgres, Redis, Prometheus, Grafana) run locally in Docker Compose. Only the GPU work runs on a rented RunPod pod (RTX 4090), which exposes nothing but SSH. An SSH tunnel carries Redis and Postgres to the pod and brings vLLM and GPU worker metrics back to Prometheus. Every published compose port binds `127.0.0.1`.
+eroll is split into two parts. The stateful services (API, CPU worker, Postgres, Redis, Prometheus, Grafana) run locally in Docker Compose. Only the GPU work runs on a rented RunPod pod (RTX 4090), which exposes nothing but SSH. An SSH tunnel carries Redis and Postgres to the pod and brings vLLM and GPU worker metrics back to Prometheus. Every published compose port binds `127.0.0.1`.
 
 ## System view
 
@@ -42,7 +42,7 @@ flowchart LR
 | Redis + RQ | | Two queues, `cpu` and `gpu`. |
 | Prometheus + Grafana | `deploy/prometheus.yml`, `deploy/grafana/` | Scrapes 4 targets (API, CPU worker, vLLM, GPU worker) every 15 s. One provisioned dashboard. |
 
-The tunnel has two reverse forwards (pod `127.0.0.1:6379` and `:5432` to the local Redis and Postgres) and two local forwards (local `18000` and `19102` to vLLM and GPU worker metrics on the pod). Prometheus reaches the local forwards as `host.docker.internal`. With the tunnel closed, both pod targets show as down.
+The tunnel has two reverse forwards (pod `127.0.0.1:6379` and `:5432` to the local Redis and Postgres) and two local forwards (local `18000` and `19102` to vLLM and GPU worker metrics on the pod). Prometheus reaches the local forwards as `host.docker.internal`. With the tunnel closed, both pod targets are reported as down.
 
 ## Job sequence
 
@@ -69,14 +69,14 @@ sequenceDiagram
     A-->>C: CSV, corrections applied
 ```
 
-- The job id is the SHA-256 of the PDF, so identical uploads are one job. The PDF is checked to open with PyMuPDF before anything is stored.
-- Re-uploading a failed PDF requeues `cpu_stage`, which re-analyses every page, so fallback pages are asked again. `gpu_stage` then skips pages that already have records and resumes extraction where it stopped. Records are unique on `(job_id, page, box)`.
+- The job id is the SHA-256 of the PDF, so identical uploads map to a single job. The PDF is checked to open with PyMuPDF before anything is stored.
+- Re-uploading a failed PDF requeues `cpu_stage`, which re-analyses every page, so fallback pages are classified by Qwen again. `gpu_stage` then skips pages that already have records and resumes extraction where it stopped. Records are unique on `(job_id, page, box)`.
 - A voter page with grid problems fails the job instead of being dropped silently. The CPU stage collects every CLIP-trusted voter page with problems into one error; the GPU stage fails on a fallback page that Qwen labels voter and that has grid problems.
 - `GET /jobs/{id}/records.csv` returns 409 until the job is completed.
 
 ## Page decision
 
-Every page is classified twice: CLIP zero-shot on the CPU, and box geometry (median box width over one third of the page width). CLIP's label is kept only when both agree and the margin is large enough. Everything else goes to Qwen.
+Every page is classified twice: CLIP zero-shot on the CPU, and box geometry (median box width over one third of the page width). CLIP's label is kept only when both agree and the margin is large enough. All other pages go to Qwen.
 
 ```mermaid
 flowchart TD
@@ -90,8 +90,8 @@ flowchart TD
     F --> G
 ```
 
-- Geometry says voter when column fill is at least 0.92 (`MIN_COLUMN_FILL_RATIO`); a page with no detected boxes is non-voter. The width test, not the box count, decides, so a voter page with a missed box stays a voter page and fails with an explicit error.
-- CLIP sees the page padded to a white square, because its processor would otherwise centre-crop away the header and footer.
+- The geometry label is voter when column fill is at least 0.92 (`MIN_COLUMN_FILL_RATIO`); a page with no detected boxes is non-voter. The width test, not the box count, decides, so a voter page with a missed box stays a voter page and fails with an explicit error.
+- CLIP receives the page padded to a white square, because its processor would otherwise remove the header and footer by centre-cropping.
 - The 0.15 margin threshold was fitted on a separate calibration set (60 PDFs, 1,744 pages).
 - The fallback sends the page downscaled to a 1,280 px longest edge and constrains the answer to `voter` or `non_voter`.
 
@@ -99,7 +99,7 @@ flowchart TD
 
 - Each box is cropped with a 2% inset per edge and sent as its own request: JSON schema decoding, temperature 0, at most 200 new tokens, token log probabilities on. Up to `MAX_CONCURRENT_REQUESTS` (default 32) requests are in flight across page boundaries.
 - The schema pins `epic id` to `^([A-Z]{3}[0-9]{7})?$`, serial number and age to digits, and `gender` and `relation type` to enums. Names and house numbers stay free text.
-- vLLM is pinned to `min_pixels` 802,816, which gives each crop about 1,066 prompt tokens. Once vLLM reports healthy, the GPU worker sends a synthetic 300x100 probe image; under 900 prompt tokens means `min_pixels` is being ignored (about 352 tokens), and the worker then never takes a job.
+- vLLM is pinned to `min_pixels` 802,816, which gives each crop approximately 1,066 prompt tokens. Once vLLM reports healthy, the GPU worker sends a synthetic 300x100 probe image; under 900 prompt tokens means `min_pixels` is being ignored (approximately 352 tokens), and the worker then accepts no jobs.
 - Requests are not retried (`max_retries=0`). A failed request fails the job, which resumes from the last stored page when resubmitted.
 - A dash-only house number is stored as empty.
 
@@ -224,7 +224,7 @@ All routes need the API key, as an `X-API-Key` header or as the password of HTTP
 | `eroll_hourly_usd` | gauge | |
 | `eroll_queue_depth` | gauge, read from Redis per scrape (API only) | `queue`: cpu, gpu |
 
-Every process serves the whole set: the API on `/metrics`, the CPU worker on `:9101` (compose network only), the GPU worker on pod loopback `:9102`. Labels only take values from fixed sets, never job ids or field values. vLLM's own serving metrics are scraped as well.
+Every process serves the full metric set: the API on `/metrics`, the CPU worker on `:9101` (compose network only), the GPU worker on pod loopback `:9102`. Labels only take values from fixed sets, never job ids or field values. vLLM's own serving metrics are scraped as well.
 
 The Grafana dashboard has four rows:
 
@@ -260,7 +260,7 @@ Settings are read from the environment or `.env` (see `.env.example`). Invalid s
 ## Security notes
 
 - Every compose port binds `127.0.0.1`. The pod exposes only SSH, with the key from `PUBLIC_KEY`; the tunnel accepts a new pod's host key on first use. vLLM has no API key and listens on pod loopback only.
-- The API uses one shared key, compared in constant time, over plain HTTP. Put it behind a TLS reverse proxy before exposing it beyond localhost.
+- The API uses one shared key, compared in constant time, over plain HTTP. It must be placed behind a TLS reverse proxy before it is exposed beyond localhost.
 - The pod receives `RUNPOD_API_KEY` (for self-deletion) and, in worker mode, `DATABASE_URL` and `REDIS_URL` with their passwords as environment variables. launch_pod.ps1 never prints them and redacts them from error messages.
 - The review crop is sent with `Cache-Control: no-store`, since it shows a voter's details.
 - Rolls, ground truth, outputs and `.env` are git-ignored and excluded from Docker images. Logs and error messages name files, pages and boxes, not field values. The one exception is `check_truth --crop`, which prints one ground-truth name so a crop can be checked by eye.
