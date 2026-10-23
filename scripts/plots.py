@@ -16,7 +16,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.patches import FancyArrowPatch, FancyBboxPatch, Polygon, Rectangle
+from matplotlib.patches import FancyArrowPatch, FancyBboxPatch, Rectangle
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "out"
@@ -111,13 +111,6 @@ def bench_numbers():
         return re.search(pattern, md).group(1)
 
     return {
-        "field_acc": grab(r"Field accuracy, overall \| ([\d.]+)%"),
-        "record_acc": grab(r"\| overall \| \d+ \| [\d.]+% \| ([\d.]+)%"),
-        "records": int(grab(r"\| overall \| (\d+) \|")),
-        "s_per_record": grab(r"Seconds per record \| ([\d.]+)"),
-        "usd_per_1k": grab(r"\$ per 1000 records \| ([\d.]+)"),
-        "dropped": int(grab(r"Voter pages dropped: (\d+)")),
-        "voter_pages": int(grab(r"\| voter \| (\d+) \|")),
         "hourly_usd": float(grab(r"`HOURLY_USD` (\d+\.\d+)")),
         "hi_records": int(grab(r"\| 1983x2806 \| (\d+) \|")),
         "lo_records": int(grab(r"\| 949x1343 \| (\d+) \|")),
@@ -277,154 +270,6 @@ def plot_hero():
         color=MUTED,
     )
     save(fig, DOCS_IMG / "hero.png")
-
-
-# ---------- KPI stat cards ----------
-
-
-def plot_kpis():
-    b = bench_numbers()
-    cards = [
-        (
-            "Field accuracy",
-            f"{b['field_acc']}%",
-            f"{b['records']:,} records, 6 PDFs",
-            GREEN,
-        ),
-        ("Record accuracy", f"{b['record_acc']}%", "all 8 fields right", GREEN),
-        (
-            "Voter pages dropped",
-            f"{b['dropped']}/{b['voter_pages']}",
-            "184 pages classified",
-            GREEN,
-        ),
-        ("Seconds per record", b["s_per_record"], "RTX 4090, 32 in flight", BLUE),
-        ("$ per 1k records", f"${b['usd_per_1k']}", f"GPU at ${b['hourly_usd']:.2f}/h", BLUE),
-    ]
-    fig = plt.figure(figsize=(16, 3.2))
-    for i, (title, value, sub, colour) in enumerate(cards):
-        ax = fig.add_axes([i * 0.2 + 0.005, 0.0, 0.19, 1.0])
-        ax.set_xlim(0, 1)
-        ax.set_ylim(0, 1)
-        ax.axis("off")
-        ax.add_patch(
-            FancyBboxPatch(
-                (0.0, 0.0),
-                1.0,
-                1.0,
-                boxstyle="round,pad=0,rounding_size=0.04",
-                fc=PANEL,
-                ec=GRID,
-                lw=1.5,
-            )
-        )
-        ax.text(0.5, 0.84, title, ha="center", fontsize=14, color=TEXT)
-        ax.text(
-            0.5, 0.45, value, ha="center", va="center", fontsize=38, weight="bold", color=colour
-        )
-        ax.text(0.5, 0.12, sub, ha="center", fontsize=12.5, color=MUTED)
-    fig.text(
-        0.005,
-        -0.12,
-        f"{b['records']:,} hand-checked records from 6 PDFs.",
-        fontsize=12,
-        color=MUTED,
-    )
-    save(fig, DOCS_IMG / "kpis.png")
-
-
-# ---------- pipeline Sankey ----------
-
-
-def band(ax, x0, top0, bot0, x1, top1, bot1, colour, alpha=0.45):
-    # A smooth flow between two vertical spans (y grows downwards)
-    x0, x1 = x0 + 0.012, x1 - 0.012  # start and end at the node edges
-    t = [i / 40 for i in range(41)]
-    s = [3 * v**2 - 2 * v**3 for v in t]
-    xs = [x0 + (x1 - x0) * v for v in t]
-    upper = [top0 + (top1 - top0) * v for v in s]
-    lower = [bot0 + (bot1 - bot0) * v for v in s]
-    pts = list(zip(xs, upper, strict=False)) + list(zip(xs[::-1], lower[::-1], strict=False))
-    ax.add_patch(Polygon(pts, closed=True, fc=colour, ec="none", alpha=alpha))
-
-
-def node(ax, x, top, bot, colour, label, side="right"):
-    ax.add_patch(Rectangle((x - 0.012, top), 0.024, bot - top, fc=colour, ec="none"))
-    tx = x + 0.025 if side == "right" else x - 0.025
-    ax.text(
-        tx,
-        (top + bot) / 2,
-        label,
-        ha="left" if side == "right" else "right",
-        va="center",
-        fontsize=13.5,
-        color=TEXT,
-    )
-
-
-def plot_pipeline_flow():
-    pages = read_csv(OUT / "eval-bench-32" / "pages.csv")
-    n = len(pages)
-    outcome = Counter(r["outcome"] for r in pages)
-    clip_v = outcome["clip_voter"]
-    fallback = outcome["qwen_fallback"]
-    fb_voter = sum(
-        1 for r in pages if r["outcome"] == "qwen_fallback" and r["final_label"] == "voter"
-    )
-    fb_non = fallback - fb_voter
-    voter_pages = clip_v + fb_voter
-    records = bench_numbers()["records"]
-    bad = len({(m["pdf"], m["page"], m["box"]) for m in mistakes("eval-bench-32")})
-    good = records - bad
-
-    fig, ax = plt.subplots(figsize=(15, 6.4))
-    ax.set_facecolor(BG)
-    ax.axis("off")
-    gap = 0.06
-
-    def h(k):
-        return k / n  # page heights; records share the voter-page span
-
-    xs = [0.04, 0.30, 0.56, 0.80]
-
-    # column 0: all pages
-    node(ax, xs[0], 0, 1, BLUE, f"{n} pages", side="left")
-    # column 1: CLIP trusted vs fallback
-    c1 = (0, h(clip_v)), (h(clip_v) + gap, 1 + gap)
-    band(ax, xs[0], 0, h(clip_v), xs[1], *c1[0], GREEN)
-    band(ax, xs[0], h(clip_v), 1, xs[1], *c1[1], ORANGE)
-    node(ax, xs[1], *c1[0], GREEN, f"{clip_v} CLIP voter\n(trusted)")
-    node(ax, xs[1], *c1[1], ORANGE, f"{fallback} Qwen fallback")
-    # column 2: final page labels
-    c2v = (0, h(voter_pages))
-    c2n = (h(voter_pages) + 2 * gap, 1 + 2 * gap)
-    band(ax, xs[1], *c1[0], xs[2], 0, h(clip_v), GREEN)
-    if fb_voter:
-        band(ax, xs[1], c1[1][0], c1[1][0] + h(fb_voter), xs[2], h(clip_v), h(voter_pages), ORANGE)
-    band(ax, xs[1], c1[1][0] + h(fb_voter), c1[1][1], xs[2], *c2n, MUTED, alpha=0.35)
-    node(ax, xs[2], *c2v, GREEN, f"{voter_pages} voter pages")
-    node(ax, xs[2], *c2n, MUTED, f"{fb_non} non-voter\n(skipped)")
-    # column 3: records, correct vs with an error
-    span = h(voter_pages)
-    cut = span * good / records
-    band(ax, xs[2], 0, cut, xs[3], 0, cut, GREEN)
-    band(ax, xs[2], cut, span, xs[3], cut + gap, span + gap, RED, alpha=0.6)
-    node(ax, xs[3], 0, cut, GREEN, f"{good:,} records\nall 8 fields right")
-    node(ax, xs[3], cut + gap, span + gap, RED, f"{bad} records with\n1+ field error")
-    ax.text(
-        xs[2] + (xs[3] - xs[2]) / 2,
-        -0.05,
-        f"{records:,} records extracted",
-        ha="center",
-        fontsize=13.5,
-        color=TEXT,
-        weight="bold",
-    )
-    ax.text(xs[2] - 0.03, -0.05, "0 voter pages dropped", ha="right", fontsize=13.5, color=GREEN)
-
-    ax.set_xlim(-0.08, 1.0)
-    ax.set_ylim(1 + 2 * gap + 0.03, -0.1)
-    save(fig, DOCS_IMG / "pipeline_flow.png")
 
 
 # ---------- page classification scatter ----------
@@ -780,8 +625,6 @@ def main():
     theme()
     charts = {
         "hero": plot_hero,
-        "kpis": plot_kpis,
-        "pipeline_flow": plot_pipeline_flow,
         "page_classification": plot_page_classification,
         "concurrency": plot_concurrency,
         "field_errors": plot_field_errors,
