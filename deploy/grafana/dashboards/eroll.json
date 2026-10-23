@@ -29,7 +29,7 @@
       "fieldConfig": { "defaults": { "unit": "none", "decimals": 0 }, "overrides": [] },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "none", "graphMode": "none" },
       "targets": [
-        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(increase(eroll_jobs_submitted_total[$__range]))", "instant": true }
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(max_over_time(eroll_jobs_submitted_total[$__range]))", "instant": true }
       ]
     },
     {
@@ -41,7 +41,7 @@
       "fieldConfig": { "defaults": { "unit": "none", "decimals": 0 }, "overrides": [] },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "none", "graphMode": "none" },
       "targets": [
-        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(increase(eroll_jobs_finished_total{status=\"completed\"}[$__range]))", "instant": true }
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(max_over_time(eroll_jobs_finished_total{status=\"completed\"}[$__range]))", "instant": true }
       ]
     },
     {
@@ -50,10 +50,10 @@
       "title": "Jobs failed",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
-      "fieldConfig": { "defaults": { "unit": "none", "decimals": 0 }, "overrides": [] },
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "none", "graphMode": "none" },
+      "fieldConfig": { "defaults": { "unit": "none", "decimals": 0, "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 1 } ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "value", "graphMode": "none" },
       "targets": [
-        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(increase(eroll_jobs_finished_total{status=\"failed\"}[$__range]))", "instant": true }
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(max_over_time(eroll_jobs_finished_total{status=\"failed\"}[$__range]))", "instant": true }
       ]
     },
     {
@@ -65,7 +65,7 @@
       "fieldConfig": { "defaults": { "unit": "none", "decimals": 0 }, "overrides": [] },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "none", "graphMode": "none" },
       "targets": [
-        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(increase(eroll_records_extracted_total[$__range]))", "instant": true }
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(max_over_time(eroll_records_extracted_total[$__range]))", "instant": true }
       ]
     },
     {
@@ -88,7 +88,7 @@
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 4, "w": 16, "x": 0, "y": 5 },
       "fieldConfig": { "defaults": { "unit": "none" }, "overrides": [] },
-      "options": { "legend": { "displayMode": "hidden", "placement": "bottom" }, "tooltip": { "mode": "single" } },
+      "options": { "legend": { "showLegend": false, "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "single" } },
       "targets": [
         { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(rate(eroll_records_extracted_total[5m])) * 60", "legendFormat": "records/min" }
       ]
@@ -107,10 +107,10 @@
       "title": "Flagged records by reason",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 10 },
-      "fieldConfig": { "defaults": { "unit": "none", "decimals": 0 }, "overrides": [] },
+      "fieldConfig": { "defaults": { "unit": "none", "decimals": 0, "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 1 } ] } }, "overrides": [] },
       "options": { "orientation": "horizontal", "displayMode": "basic", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
       "targets": [
-        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum by (reason) (increase(eroll_flagged_records_total[$__range]))", "legendFormat": "{{reason}}", "instant": true }
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum by (reason) (max_over_time(eroll_flagged_records_total[$__range]))", "legendFormat": "{{reason}}", "instant": true }
       ]
     },
     {
@@ -119,10 +119,10 @@
       "title": "Page decisions by outcome",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 8, "x": 8, "y": 10 },
-      "fieldConfig": { "defaults": { "unit": "none", "decimals": 0 }, "overrides": [] },
+      "fieldConfig": { "defaults": { "unit": "none", "decimals": 0, "color": { "mode": "fixed", "fixedColor": "blue" } }, "overrides": [] },
       "options": { "orientation": "horizontal", "displayMode": "basic", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
       "targets": [
-        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum by (outcome) (increase(eroll_page_decisions_total[$__range]))", "legendFormat": "{{outcome}}", "instant": true }
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum by (outcome) (max_over_time(eroll_page_decisions_total[$__range]))", "legendFormat": "{{outcome}}", "instant": true }
       ]
     },
     {
@@ -131,10 +131,10 @@
       "title": "CLIP margin (pages per bucket upper bound)",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 8, "x": 16, "y": 10 },
-      "fieldConfig": { "defaults": { "unit": "none", "decimals": 0 }, "overrides": [] },
+      "fieldConfig": { "defaults": { "unit": "none", "decimals": 0, "color": { "mode": "fixed", "fixedColor": "blue" } }, "overrides": [] },
       "options": { "orientation": "vertical", "displayMode": "basic", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
       "targets": [
-        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum by (le) (increase(eroll_clip_margin_bucket[$__range]))", "legendFormat": "{{le}}", "format": "heatmap", "instant": true }
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum by (le) (max_over_time(eroll_clip_margin_bucket[$__range]))", "legendFormat": "{{le}}", "format": "heatmap", "instant": true }
       ]
     },
     {
@@ -155,7 +155,7 @@
       "fieldConfig": { "defaults": { "unit": "currencyUSD", "decimals": 2 }, "overrides": [] },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "none", "graphMode": "none" },
       "targets": [
-        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(increase(eroll_gpu_seconds_total[$__range])) * max(max_over_time(eroll_hourly_usd[$__range])) / 3600", "instant": true }
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(max_over_time(eroll_gpu_seconds_total[$__range])) * max(max_over_time(eroll_hourly_usd[$__range])) / 3600", "instant": true }
       ]
     },
     {
@@ -168,7 +168,7 @@
       "fieldConfig": { "defaults": { "unit": "currencyUSD", "decimals": 3 }, "overrides": [] },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "none", "graphMode": "none" },
       "targets": [
-        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(increase(eroll_gpu_seconds_total[$__range])) * max(max_over_time(eroll_hourly_usd[$__range])) / 3600 / (sum(increase(eroll_records_extracted_total[$__range])) > 0) * 1000", "instant": true }
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(max_over_time(eroll_gpu_seconds_total[$__range])) * max(max_over_time(eroll_hourly_usd[$__range])) / 3600 / (sum(max_over_time(eroll_records_extracted_total[$__range])) > 0) * 1000", "instant": true }
       ]
     },
     {
@@ -181,7 +181,7 @@
       "fieldConfig": { "defaults": { "unit": "percentunit", "decimals": 1, "min": 0, "max": 1 }, "overrides": [] },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "none", "graphMode": "none" },
       "targets": [
-        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(increase(eroll_gpu_seconds_total{state=\"idle\"}[$__range])) / (sum(increase(eroll_gpu_seconds_total[$__range])) > 0)", "instant": true }
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(max_over_time(eroll_gpu_seconds_total{state=\"idle\"}[$__range])) / (sum(max_over_time(eroll_gpu_seconds_total[$__range])) > 0)", "instant": true }
       ]
     },
     {
@@ -193,7 +193,7 @@
       "fieldConfig": { "defaults": { "unit": "s", "decimals": 0 }, "overrides": [] },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "none", "graphMode": "none", "textMode": "value_and_name" },
       "targets": [
-        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum by (state) (increase(eroll_gpu_seconds_total[$__range]))", "legendFormat": "{{state}}", "instant": true }
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum by (state) (max_over_time(eroll_gpu_seconds_total[$__range]))", "legendFormat": "{{state}}", "instant": true }
       ]
     },
     {
