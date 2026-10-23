@@ -1,0 +1,26 @@
+# Prometheus for the local stack, scraping every target every 15 s.
+# The pod's two targets are reached through the tunnel's local forwards on host
+# 127.0.0.1 (host.docker.internal from a container). With the tunnel closed both are down.
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: api
+    basic_auth:
+      username: prometheus
+      password_file: /run/secrets/api_key
+    static_configs:
+      - targets: ["api:8080"]
+
+  - job_name: cpu-worker
+    static_configs:
+      - targets: ["cpu-worker:9101"]
+
+  - job_name: vllm
+    # vLLM's own serving metrics, scraped as they are. Tunnel -L 18000 -> 8000.
+    static_configs:
+      - targets: ["host.docker.internal:18000"]
+
+  - job_name: gpu-worker
+    static_configs:
+      - targets: ["host.docker.internal:19102"]

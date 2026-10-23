@@ -1,0 +1,20 @@
+# Personal data: electoral rolls, ground truth, predictions and credentials.
+data/
+out/
+.env
+**/mistakes.csv
+
+# Environment and caches
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.hypothesis/
+dist/
+build/
+*.egg-info/
+
+# Editor and agent tooling, not project code
+.kiro/
+.agents/

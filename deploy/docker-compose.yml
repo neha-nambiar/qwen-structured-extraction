@@ -1,0 +1,107 @@
+# Local stack. Run from the repo root so ${...} substitution reads the root .env:
+#   docker compose --env-file .env -f deploy/docker-compose.yml up -d --build
+# Every published port binds 127.0.0.1 only. The pod reaches redis and postgres
+# through the SSH tunnel's reverse forwards, never through a public interface.
+# Prometheus scrapes the api, the cpu-worker and, through the tunnel's local forwards,
+# the pod; Grafana provisions its one dashboard from deploy/grafana/.
+
+x-app: &app
+  image: eroll-cpu:local
+  build:
+    context: ..
+    dockerfile: deploy/Dockerfile.cpu
+  env_file: ../.env
+  # .env points at 127.0.0.1 for host-side tools; inside the compose network the same
+  # services are reached by service name, so these two override it.
+  environment:
+    DATABASE_URL: postgresql+psycopg://eroll:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/eroll
+    REDIS_URL: redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}@redis:6379/0
+
+services:
+  redis:
+    image: redis:7.4.2-alpine
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}"]
+    ports: ["127.0.0.1:6379:6379"]
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    volumes: [redis-data:/data]
+
+  postgres:
+    image: postgres:16.6-bookworm
+    environment:
+      POSTGRES_USER: eroll
+      POSTGRES_DB: eroll
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    ports: ["127.0.0.1:5432:5432"]
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "eroll", "-d", "eroll"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes: [postgres-data:/var/lib/postgresql/data]
+
+  migrate:
+    <<: *app
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    depends_on:
+      postgres: {condition: service_healthy}
+
+  api:
+    <<: *app
+    command: ["uvicorn", "eroll.service.api:app", "--host", "0.0.0.0", "--port", "8080"]
+    ports: ["127.0.0.1:8080:8080"]
+    restart: unless-stopped
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+
+  cpu-worker:
+    <<: *app
+    command: ["python", "-m", "eroll.service.workers", "cpu"]
+    # No ports: metrics on :9101 are scraped over the compose network only.
+    restart: unless-stopped
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+
+  prometheus:
+    image: prom/prometheus:v3.15.0
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    # The API key for scraping /metrics, mounted at /run/secrets/api_key.
+    secrets: [api_key]
+    ports: ["127.0.0.1:9090:9090"]
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:13.2.3
+    environment:
+      # Applied when the grafana-data volume is first created.
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports: ["127.0.0.1:3000:3000"]
+    restart: unless-stopped
+    depends_on: [prometheus]
+
+secrets:
+  api_key:
+    environment: API_KEY
+
+volumes:
+  redis-data:
+  postgres-data:
+  prometheus-data:
+  grafana-data:

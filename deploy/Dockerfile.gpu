@@ -1,0 +1,30 @@
+# GPU pod image: vLLM server plus the GPU worker, one container.
+FROM vllm/vllm-openai:v0.29.0
+
+COPY --from=ghcr.io/astral-sh/uv:0.9.18 /uv /usr/local/bin/uv
+
+# sshd is the pod's only exposed service; the tunnel runs over it.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openssh-server \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /run/sshd /root/.ssh \
+    && chmod 700 /root/.ssh
+
+WORKDIR /app
+COPY pyproject.toml uv.lock ./
+
+RUN uv export --locked --no-dev --no-emit-project --no-hashes -o /tmp/requirements.txt \
+    && uv pip install --system -r /tmp/requirements.txt \
+    && rm /tmp/requirements.txt
+
+COPY src ./src
+RUN uv pip install --system --no-deps .
+COPY alembic.ini ./
+COPY migrations ./migrations
+
+COPY deploy/gpu-entrypoint.sh /usr/local/bin/gpu-entrypoint.sh
+RUN chmod +x /usr/local/bin/gpu-entrypoint.sh
+
+# Only SSH is published; vLLM and the worker metrics stay on pod loopback.
+EXPOSE 22
+ENTRYPOINT ["/usr/local/bin/gpu-entrypoint.sh"]

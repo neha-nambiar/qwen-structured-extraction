@@ -1,0 +1,11 @@
+# Personal data, results and secrets never enter an image.
+data/
+out/
+.env
+.git
+# Local caches that only bloat the build context.
+.venv/
+.hypothesis/
+.pytest_cache/
+.ruff_cache/
+**/__pycache__/

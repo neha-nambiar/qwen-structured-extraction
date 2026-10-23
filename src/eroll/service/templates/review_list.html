@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Records awaiting review</title>
+</head>
+<body>
+  <main>
+    <h1>Records awaiting review</h1>
+    {% if items %}
+    <p>{{ items | length }} records await review.</p>
+    <table>
+      <caption>Unreviewed flagged records, by Job submission time, page and box</caption>
+      <thead>
+        <tr>
+          <th scope="col">Job</th>
+          <th scope="col">Page</th>
+          <th scope="col">Box</th>
+          <th scope="col">Reasons</th>
+          <th scope="col">Confidence</th>
+          <th scope="col">Review</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        <tr>
+          <td><code>{{ item.job_id }}</code></td>
+          <td>{{ item.page }}</td>
+          <td>{{ item.box }}</td>
+          <td>{{ item.reasons | join(", ") }}</td>
+          <td>{% if item.confidence is not none %}{{ "%.4f" | format(item.confidence) }}{% endif %}</td>
+          <td><a href="/review/{{ item.id }}">Review page {{ item.page }}, box {{ item.box }}</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p>0 records await review. No flagged record is waiting.</p>
+    {% endif %}
+  </main>
+</body>
+</html>

@@ -1,0 +1,18 @@
+# Local-stack image shared by the api, cpu-worker and migrate services;
+# docker-compose.yml sets the command per service.
+FROM python:3.12.15-slim-bookworm
+COPY --from=ghcr.io/astral-sh/uv:0.9.18 /uv /usr/local/bin/uv
+WORKDIR /app
+# Precompile bytecode so the first job does not pay for compiling imports.
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    PATH="/app/.venv/bin:$PATH"
+# Dependencies first, in their own layer, so a source edit does not reinstall torch.
+# torch comes from the CPU index in [tool.uv.sources], so no CUDA libraries.
+COPY pyproject.toml uv.lock ./
+RUN uv sync --locked --extra clip --no-dev --no-install-project
+COPY src ./src
+COPY alembic.ini ./
+COPY migrations ./migrations
+RUN uv sync --locked --extra clip --no-dev
+CMD ["python", "-c", "import eroll"]

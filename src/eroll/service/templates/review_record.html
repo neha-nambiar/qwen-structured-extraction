@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Review Job {{ job_id }}, page {{ page }}, box {{ box }}</title>
+</head>
+<body>
+  <main>
+    <h1>Review page {{ page }}, box {{ box }}</h1>
+    <p>Job <code>{{ job_id }}</code>. Flagged: {{ reasons | join(", ") }}{% if confidence is not none %}; confidence {{ "%.4f" | format(confidence) }}{% endif %}.</p>
+    <img src="/review/{{ record_id }}/crop.png" alt="Job {{ job_id }}, page {{ page }}, box {{ box }}">
+    {# Inputs follow FIELD_KEYS order, so Tab order matches the CSV columns. #}
+    <form method="post" action="/review/{{ record_id }}">
+      {% for key, value in fields %}
+      <p>
+        <label for="f{{ loop.index0 }}">{{ key }}</label>
+        <input type="text" id="f{{ loop.index0 }}" name="f{{ loop.index0 }}" value="{{ value }}" autocomplete="off">
+      </p>
+      {% endfor %}
+      <button type="submit">Save and go to the next record</button>
+    </form>
+    <p><a href="/review">Back to the review list</a></p>
+  </main>
+</body>
+</html>

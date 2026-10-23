@@ -1,0 +1,66 @@
+[project]
+name = "eroll"
+version = "3.0.0"
+description = "Structured voter records from scanned electoral roll PDFs"
+requires-python = "==3.12.*"
+# Exact pins, resolved together with vllm==0.29.0 because Dockerfile.gpu installs them
+# on top of the vLLM base image (which caps fastapi < 0.137 and numpy < 2.4).
+dependencies = [
+    "alembic==1.20.0",
+    "fastapi==0.136.3",
+    "jinja2==3.1.6",
+    "numpy==2.3.5",
+    "openai==3.24.0",
+    "opencv-python-headless==5.0.0.93",
+    "pillow==12.3.0",
+    "prometheus-client==0.26.0",
+    "psycopg[binary]==3.3.6",
+    "pydantic==2.13.5",
+    "pydantic-settings==2.15.0",
+    "pymupdf==1.28.2",
+    "python-multipart==0.0.32",
+    "redis==8.1.0",
+    "rq==2.12.0",
+    "sqlalchemy==2.1.3",
+    "uvicorn==0.54.0",
+]
+
+[project.optional-dependencies]
+# CLIP runs on the CPU worker and in calibrate.py only; the GPU image gets torch from
+# its base image.
+clip = [
+    "torch==2.13.0",
+    "transformers==5.18.0",
+]
+
+[dependency-groups]
+dev = [
+    "hypothesis==6.168.3",
+    "pytest==9.1.1",
+    "ruff==0.16.10",
+]
+
+[build-system]
+requires = ["uv_build==0.9.18"]
+build-backend = "uv_build"
+
+[tool.uv.sources]
+# CPU-only torch wheels keep the CPU image and local installs small.
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.ruff]
+line-length = 100
+# .kiro holds editor tooling files, not project code.
+extend-exclude = [".kiro"]
+
+[tool.ruff.lint]
+# pycodestyle, pyflakes, import order, bugbear, pyupgrade.
+select = ["E", "F", "W", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
