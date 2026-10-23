@@ -30,4 +30,4 @@ Geometry measures exactly the property that separates the classes. Voter boxes s
 
 ## Caveats
 
-The 18 non-voter pages are a small sample: the fallback's 18 of 18 correct has a 95% Wilson lower bound of only 82.41%. The ground truth takes true labels from position (pages 1, 2 and the last page are non-voter), which holds for this roll format. 9.78% of pages went to the fallback here (95% Wilson 6.28% to 14.93%), close to the 11.07% seen on the calibration set.
+The 18 non-voter pages are a small sample: 18 of 18 correct shows the fallback works on these pages, not that it never fails. The ground truth takes true labels from position (pages 1, 2 and the last page are non-voter), which holds for this roll format. 9.78% of pages went to the fallback here, close to the 11.07% seen on the calibration set.

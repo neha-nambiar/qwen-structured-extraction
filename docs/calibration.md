@@ -24,13 +24,13 @@ Non-voter:
 
 ## Cascade errors at the selected threshold
 
-| Class | Pages | Errors | Rate | Wilson 95% lower | Wilson 95% upper |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| voter | 1564 | 0 | 0.0000 | 0.0000 | 0.0025 |
-| non_voter | 180 | 0 | 0.0000 | 0.0000 | 0.0209 |
+| Class | Pages | Errors | Rate |
+| --- | ---: | ---: | ---: |
+| voter | 1564 | 0 | 0.0000 |
+| non_voter | 180 | 0 | 0.0000 |
 
 ## Pages sent to the Qwen fallback at the selected threshold
 
-| Pages | `qwen_fallback` | Rate | Wilson 95% lower | Wilson 95% upper |
-| ---: | ---: | ---: | ---: | ---: |
-| 1744 | 193 | 0.1107 | 0.0968 | 0.1263 |
+| Pages | `qwen_fallback` | Rate |
+| ---: | ---: | ---: |
+| 1744 | 193 | 0.1107 |

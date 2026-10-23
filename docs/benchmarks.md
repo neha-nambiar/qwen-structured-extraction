@@ -10,20 +10,20 @@ Scored 6 ground truth PDFs, 184 pages and 4829 records. GPU: NVIDIA GeForce RTX 
 
 | Measure | This run |
 |---|---|
-| Field accuracy, overall | 99.66% (95% Wilson 99.60% to 99.72%) |
-| Field accuracy, 1983x2806 | 99.72% (95% Wilson 99.66% to 99.77%) |
-| Field accuracy, 949x1343 | 99.38% (95% Wilson 99.15% to 99.54%) |
+| Field accuracy, overall | 99.66% |
+| Field accuracy, 1983x2806 | 99.72% |
+| Field accuracy, 949x1343 | 99.38% |
 | Voter pages dropped | 0 (pass) |
 | Seconds per record | 0.252 |
 | $ per 1000 records | 0.052 |
 
 ## Extraction accuracy
 
-| Scope | Records | Field accuracy | Record accuracy | Record 95% Wilson | Parse failures | Field errors |
-|---|---|---|---|---|---|---|
-| overall | 4829 | 99.66% | 97.78% | 97.33% to 98.16% | 0 | epic id: 2, name: 70, relation type: 4, relation name: 44, house number: 8, gender: 2 |
-| 1983x2806 | 4008 | 99.72% | 98.15% | 97.69% to 98.53% | 0 | epic id: 2, name: 47, relation type: 4, relation name: 33, house number: 1, gender: 2 |
-| 949x1343 | 821 | 99.38% | 95.98% | 94.41% to 97.12% | 0 | name: 23, relation name: 11, house number: 7 |
+| Scope | Records | Field accuracy | Record accuracy | Parse failures | Field errors |
+|---|---|---|---|---|---|
+| overall | 4829 | 99.66% | 97.78% | 0 | epic id: 2, name: 70, relation type: 4, relation name: 44, house number: 8, gender: 2 |
+| 1983x2806 | 4008 | 99.72% | 98.15% | 0 | epic id: 2, name: 47, relation type: 4, relation name: 33, house number: 1, gender: 2 |
+| 949x1343 | 821 | 99.38% | 95.98% | 0 | name: 23, relation name: 11, house number: 7 |
 
 ## Page classification
 
@@ -34,9 +34,9 @@ Scored 6 ground truth PDFs, 184 pages and 4829 records. GPU: NVIDIA GeForce RTX 
 
 Voter pages dropped: 0.
 
-Qwen fallback rate: 18 of 184 pages, 9.78% (95% Wilson 6.28% to 14.93%); calibration set rate 11.07%.
+Qwen fallback rate: 18 of 184 pages, 9.78%; calibration set rate 11.07%.
 
-Fallback accuracy (pages the cascade sent to the fallback): 0 wrong of 18 pages (95% Wilson on correct 82.41% to 100.00%).
+Fallback accuracy (pages the cascade sent to the fallback): 0 wrong of 18 pages.
 
 ## Detection
 

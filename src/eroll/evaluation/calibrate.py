@@ -7,7 +7,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from eroll.evaluation.score import true_label, wilson_interval
+from eroll.evaluation.score import true_label
 from eroll.pages.boxes import PAGE_TYPE_NON_VOTER, PAGE_TYPE_VOTER
 from eroll.pages.classify import (
     CLIP_MODEL_ID,
@@ -25,8 +25,8 @@ log = logging.getLogger(__name__)
 
 MAX_CLASS_ERROR_RATE = 0.0
 
-# Several constituencies so the threshold is not fitted to one printer's scans; sixty
-# PDFs so that zero errors still gives a tight Wilson upper bound.
+# Several constituencies so the threshold isn't fitted to one printer's scans; sixty
+# PDFs for a large enough check set.
 MIN_CALIBRATION_PDFS = 60
 MIN_CONSTITUENCIES = 6
 
@@ -163,23 +163,18 @@ def write_calibration_md(
         "",
         "## Cascade errors at the selected threshold",
         "",
-        "| Class | Pages | Errors | Rate | Wilson 95% lower | Wilson 95% upper |",
-        "| --- | ---: | ---: | ---: | ---: | ---: |",
+        "| Class | Pages | Errors | Rate |",
+        "| --- | ---: | ---: | ---: |",
     ]
     for label, (errors, total) in error_counts.items():
-        low, high = wilson_interval(errors, total)
-        lines.append(
-            f"| {label} | {total} | {errors} | {errors / total:.4f} | {low:.4f} | {high:.4f} |"
-        )
-    low, high = wilson_interval(fallback_count, page_count)
+        lines.append(f"| {label} | {total} | {errors} | {errors / total:.4f} |")
     lines += [
         "",
         "## Pages sent to the Qwen fallback at the selected threshold",
         "",
-        "| Pages | `qwen_fallback` | Rate | Wilson 95% lower | Wilson 95% upper |",
-        "| ---: | ---: | ---: | ---: | ---: |",
-        f"| {page_count} | {fallback_count} | {fallback_count / page_count:.4f} "
-        f"| {low:.4f} | {high:.4f} |",
+        "| Pages | `qwen_fallback` | Rate |",
+        "| ---: | ---: | ---: |",
+        f"| {page_count} | {fallback_count} | {fallback_count / page_count:.4f} |",
         "",
     ]
     path.write_text("\n".join(lines), encoding="utf-8", newline="\n")
@@ -255,23 +250,12 @@ def main() -> None:
         constituency_count,
     )
     for label, (errors, total) in error_counts.items():
-        low, high = wilson_interval(errors, total)
-        log.info(
-            "  %s: %d errors in %d pages, Wilson 95%% [%.4f, %.4f]",
-            label,
-            errors,
-            total,
-            low,
-            high,
-        )
-    low, high = wilson_interval(fallback_count, len(pages))
+        log.info("  %s: %d errors in %d pages", label, errors, total)
     log.info(
-        "  qwen_fallback: %d of %d pages (%.4f), Wilson 95%% [%.4f, %.4f]",
+        "  qwen_fallback: %d of %d pages (%.4f)",
         fallback_count,
         len(pages),
         fallback_count / len(pages),
-        low,
-        high,
     )
 
     write_calibration_md(

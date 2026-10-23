@@ -112,8 +112,6 @@ def bench_numbers():
 
     return {
         "field_acc": grab(r"Field accuracy, overall \| ([\d.]+)%"),
-        "field_lo": grab(r"Field accuracy, overall \| [\d.]+% \(95% Wilson ([\d.]+)%"),
-        "field_hi": grab(r"Field accuracy, overall \| [\d.]+% \(95% Wilson [\d.]+% to ([\d.]+)%"),
         "record_acc": grab(r"\| overall \| \d+ \| [\d.]+% \| ([\d.]+)%"),
         "records": int(grab(r"\| overall \| (\d+) \|")),
         "s_per_record": grab(r"Seconds per record \| ([\d.]+)"),
@@ -290,7 +288,7 @@ def plot_kpis():
         (
             "Field accuracy",
             f"{b['field_acc']}%",
-            f"Wilson {b['field_lo']} to {b['field_hi']}%",
+            f"{b['records']:,} records, 6 PDFs",
             GREEN,
         ),
         ("Record accuracy", f"{b['record_acc']}%", "all 8 fields right", GREEN),

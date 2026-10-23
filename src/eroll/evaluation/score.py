@@ -4,7 +4,6 @@ import argparse
 import csv
 import json
 import logging
-import math
 import statistics
 from dataclasses import dataclass, field
 from datetime import date
@@ -52,24 +51,6 @@ def true_label(page: int, page_count: int) -> str:
     if page in (1, 2, page_count):
         return PAGE_TYPE_NON_VOTER
     return PAGE_TYPE_VOTER
-
-
-def wilson_interval(successes: int, total: int, z: float = 1.96) -> tuple[float, float]:
-    """Wilson score interval (low, high); unlike the normal approximation it holds near 1.0."""
-    if total < 1:
-        raise ValueError(f"total {total} must be at least 1")
-    if not 0 <= successes <= total:
-        raise ValueError(f"successes {successes} is outside 0..{total}")
-
-    p = successes / total
-    z2 = z * z
-    denominator = 1 + z2 / total
-    centre = (p + z2 / (2 * total)) / denominator
-    half_width = z * math.sqrt(p * (1 - p) / total + z2 / (4 * total * total)) / denominator
-    # Clamp so the interval always brackets p despite rounding at k = 0 and k = n.
-    low = min(max(centre - half_width, 0.0), p)
-    high = max(min(centre + half_width, 1.0), p)
-    return low, high
 
 
 def check_truth(name: str, records: list[Record], page_count: int) -> None:
@@ -174,11 +155,6 @@ def percent(value: float) -> str:
     return f"{100 * value:.2f}%"
 
 
-def interval(successes: int, total: int) -> str:
-    low, high = wilson_interval(successes, total)
-    return f"{percent(low)} to {percent(high)}"
-
-
 def verdict(passed: bool, evaluated: bool) -> str:
     if not evaluated:
         return "not evaluated"
@@ -188,8 +164,7 @@ def verdict(passed: bool, evaluated: bool) -> str:
 def accuracy_rows(label: str, s: Scores) -> list[str]:
     return [
         f"| {label} | {s.records} | {percent(s.fields_correct / s.fields)} "
-        f"| {percent(s.records_correct / s.records)} | {interval(s.records_correct, s.records)} "
-        f"| {s.parse_failures} | "
+        f"| {percent(s.records_correct / s.records)} | {s.parse_failures} | "
         + ", ".join(f"{k}: {n}" for k, n in s.field_errors.items() if n)
         + " |"
     ]
@@ -204,14 +179,11 @@ def write_mistakes(run_dir: Path, scores: Scores) -> None:
 
 def log_accuracy(label: str, s: Scores) -> None:
     log.info(
-        "%s: %d Records, field accuracy %s (95%% Wilson %s), Record accuracy %s "
-        "(95%% Wilson %s), %d parse failures",
+        "%s: %d Records, field accuracy %s, Record accuracy %s, %d parse failures",
         label,
         s.records,
         percent(s.fields_correct / s.fields),
-        interval(s.fields_correct, s.fields),
         percent(s.records_correct / s.records),
-        interval(s.records_correct, s.records),
         s.parse_failures,
     )
 
@@ -389,11 +361,9 @@ def main() -> None:
         "",
         "| Measure | This run |",
         "|---|---|",
-        f"| Field accuracy, overall | {percent(overall_field)} "
-        f"(95% Wilson {interval(overall.fields_correct, overall.fields)}) |",
+        f"| Field accuracy, overall | {percent(overall_field)} |",
         *(
-            f"| Field accuracy, {size} | {percent(s.fields_correct / s.fields)} "
-            f"(95% Wilson {interval(s.fields_correct, s.fields)}) |"
+            f"| Field accuracy, {size} | {percent(s.fields_correct / s.fields)} |"
             for size, s in by_size.items()
         ),
         f"| Voter pages dropped | {dropped} ({verdict(dropped == 0, complete)}) |",
@@ -402,9 +372,8 @@ def main() -> None:
         "",
         "## Extraction accuracy",
         "",
-        "| Scope | Records | Field accuracy | Record accuracy | Record 95% Wilson "
-        "| Parse failures | Field errors |",
-        "|---|---|---|---|---|---|---|",
+        "| Scope | Records | Field accuracy | Record accuracy | Parse failures | Field errors |",
+        "|---|---|---|---|---|---|",
         *accuracy_rows("overall", overall),
         *(row for size, s in by_size.items() for row in accuracy_rows(size, s)),
         "",
@@ -416,8 +385,8 @@ def main() -> None:
         "",
         f"Voter pages dropped: {dropped}.",
         "",
-        f"Qwen fallback rate: {fallback} of {total_pages} pages, {percent(fallback / total_pages)} "
-        f"(95% Wilson {interval(fallback, total_pages)}); calibration set rate "
+        f"Qwen fallback rate: {fallback} of {total_pages} pages, "
+        f"{percent(fallback / total_pages)}; calibration set rate "
         f"{percent(CLIP_CALIBRATION_FALLBACK_RATE)}.",
     ]
     if qwen_scored:
@@ -430,8 +399,7 @@ def main() -> None:
                 else "pages the cascade sent to the fallback"
             )
             + f"): {qwen_wrong} wrong of "
-            f"{qwen_scored} pages (95% Wilson on correct "
-            f"{interval(qwen_scored - qwen_wrong, qwen_scored)}).",
+            f"{qwen_scored} pages.",
         ]
     lines += [
         "",

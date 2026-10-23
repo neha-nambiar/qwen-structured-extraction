@@ -2,14 +2,14 @@
 
 ## Summary
 
-The rolls come in two scan formats: 1983 x 2806 JPEG pages (240 DPI) and 949 x 1343 Flate pages (115 DPI). On the low-resolution pages, 0.62% of fields were wrong against 0.28% on the high-resolution pages. Record accuracy drops from 98.15% to 95.98%, and the two 95% intervals do not overlap. The low-resolution sample is small: 821 records from a single 31-page PDF.
+The rolls come in two scan formats: 1983 x 2806 JPEG pages (240 DPI) and 949 x 1343 Flate pages (115 DPI). On the low-resolution pages, 0.62% of fields were wrong against 0.28% on the high-resolution pages. Record accuracy drops from 98.15% to 95.98%. The low-resolution sample is small: 821 records from a single 31-page PDF.
 
 ![Error rate by field at 240 and 115 DPI](img/scan_resolution.png)
 
-| Page size | Records | Field accuracy | Record accuracy | Record 95% Wilson |
-|---|---|---|---|---|
-| 1983x2806 (240 DPI) | 4,008 | 99.72% | 98.15% | 97.69% to 98.53% |
-| 949x1343 (115 DPI) | 821 | 99.38% | 95.98% | 94.41% to 97.12% |
+| Page size | Records | Field accuracy | Record accuracy |
+|---|---|---|---|
+| 1983x2806 (240 DPI) | 4,008 | 99.72% | 98.15% |
+| 949x1343 (115 DPI) | 821 | 99.38% | 95.98% |
 
 | Field | Errors at 240 DPI | Errors at 115 DPI |
 |---|---|---|
